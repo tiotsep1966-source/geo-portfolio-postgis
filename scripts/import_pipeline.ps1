@@ -15,6 +15,9 @@ ogr2ogr -f "PostgreSQL" "PG:host=localhost dbname=$DB user=$USER password=$PGPAS
 Write-Host "Import des batiments..."
 ogr2ogr -f "PostgreSQL" "PG:host=localhost dbname=$DB user=$USER password=$PGPASSWORD_VAL" "$DATA\osm\centre.gpkg" gis_osm_buildings_a_free -nln patrimoine.batiments_raw -lco GEOMETRY_NAME=geom -t_srs EPSG:2154 -overwrite
 
+Write-Host "Import des casernes de pompiers..."
+ogr2ogr -f "PostgreSQL" "PG:host=localhost dbname=$DB user=$USER password=$PGPASSWORD_VAL" "$DATA\osm\centre.gpkg" gis_osm_pois_free -nln secours.casernes_raw -lco GEOMETRY_NAME=geom -t_srs EPSG:2154 -overwrite -where "fclass='fire_station'"
+
 Write-Host "Nettoyage, contraintes, jointures et vue d'analyse..."
 & $PSQL -U $USER -d $DB -f "C:\geo_portfolio\sql\02_nettoyage_et_jointures.sql"
 

@@ -68,3 +68,37 @@ LEFT JOIN (SELECT commune_id, ROUND(SUM(ST_Length(geom))::numeric/1000,2) AS km_
 LEFT JOIN (SELECT commune_id, COUNT(*) AS nb_batiments
     FROM patrimoine.batiments GROUP BY commune_id) b ON b.commune_id = c.id;
 CREATE UNIQUE INDEX idx_stats_insee ON analyses.stats_par_commune (code_insee);
+
+CREATE SCHEMA IF NOT EXISTS secours;
+
+DROP TABLE IF EXISTS secours.casernes_pompiers CASCADE;
+CREATE TABLE secours.casernes_pompiers (
+    id SERIAL PRIMARY KEY,
+    nom VARCHAR(150),
+    commune_id INTEGER REFERENCES admin.communes(id),
+    geom GEOMETRY(Point, 2154) NOT NULL,
+    CONSTRAINT chk_casernes_geom_valid CHECK (ST_IsValid(geom))
+);
+INSERT INTO secours.casernes_pompiers (nom, geom)
+SELECT COALESCE(name, 'Caserne sans nom'), ST_MakeValid(geom)
+FROM secours.casernes_raw WHERE geom IS NOT NULL;
+DROP TABLE IF EXISTS secours.casernes_raw;
+
+CREATE INDEX idx_casernes_geom ON secours.casernes_pompiers USING GIST (geom);
+
+UPDATE secours.casernes_pompiers p SET commune_id = c.id
+FROM admin.communes c WHERE ST_Within(p.geom, c.geom);
+
+CREATE INDEX idx_casernes_commune ON secours.casernes_pompiers (commune_id);
+
+DROP MATERIALIZED VIEW IF EXISTS analyses.distance_caserne_par_commune;
+CREATE MATERIALIZED VIEW analyses.distance_caserne_par_commune AS
+SELECT c.code_insee, c.nom,
+    ROUND((
+        SELECT ST_Distance(ST_Centroid(c.geom), p.geom)
+        FROM secours.casernes_pompiers p
+        ORDER BY ST_Centroid(c.geom) <-> p.geom
+        LIMIT 1
+    )::numeric / 1000, 2) AS distance_km_caserne_proche
+FROM admin.communes c;
+CREATE UNIQUE INDEX idx_distance_caserne_insee ON analyses.distance_caserne_par_commune (code_insee);
